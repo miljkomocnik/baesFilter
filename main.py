@@ -1,3 +1,4 @@
+import math
 import pickle
 from Model import Model
 import configparser
@@ -8,30 +9,47 @@ import train
 def mult(list_: list):
     total_prob = 1
     for i in list_:
-        total_prob = total_prob * i
+        total_prob = total_prob * math.log(i)
     return total_prob
 
 
 def n_bayes(email: list, model: Model):
-    probs = []
+    prob_s = []
+    prob_h = []
+    pr_s = model.prob_spam
+    pr_h = model.prob_ham
+    prob_s.append(pr_s)
+    prob_h.append(pr_h)
+
     for word in email:
-        pr_s = model.prob_spam
         try:
             pr_ws = model.dict_spamicity[word]
         except KeyError:
-            # Apply smoothing for word not seen in spam training data, but seen in ham training
-            pr_ws = 1 / (model.total_spam + 2)  # umesto dva ide broj reci
+            # Apply smoothing for word not seen in spam training data
+            pr_ws = model.alfa / (
+                    model.total_spam +
+                    (len(model.dict_hamicity.keys()) + len(model.dict_spamicity.keys()))
+                    * model.alfa)
 
-        pr_h = model.prob_ham
         try:
             pr_wh = model.dict_hamicity[word]
         except KeyError:
-            # Apply smoothing for word not seen in ham training data, but seen in spam training
-            pr_wh = (1 / (model.total_ham + 2))
+            # Apply smoothing for word not seen in ham training data
+            pr_wh = model.alfa / (
+                    model.total_ham +
+                    (len(model.dict_hamicity.keys()) + len(model.dict_spamicity.keys()))
+                    * model.alfa)
 
-        prob_word_is_spam_bayes = (pr_ws * pr_s) / ((pr_ws * pr_s) + (pr_wh * pr_h))
-        probs.append(prob_word_is_spam_bayes)
-    final_classification = mult(probs)
+        prob_s.append(pr_ws)
+        prob_h.append(pr_wh)
+
+    prob_x = mult(prob_s) + mult(prob_h)
+    spam = mult(prob_s) / prob_x
+    ham = mult(prob_h) / prob_x
+    print(spam)
+    print(ham)
+
+    final_classification = spam > ham
     return final_classification
 
 
@@ -49,15 +67,13 @@ def load_model():
 
 def test_email(email: str):
     # split emails into distinct words
-    email_words = email.split()
+    email_words = list(dict.fromkeys(email.split()))
     loaded_model: Model = load_model()
 
     # remove new and stop words
     reduced_email = []
     for word in email_words:
-        if word not in loaded_model.stop_words and \
-                (word in loaded_model.dict_spamicity.keys() or
-                 word in loaded_model.dict_hamicity.keys()):
+        if word not in loaded_model.stop_words:
             reduced_email.append(word)
     print(reduced_email)
     print(
@@ -68,4 +84,4 @@ def test_email(email: str):
 if __name__ == '__main__':
     # define training data
     train.train_model()
-    test_email("renew renew your password")
+    test_email("review your password")
