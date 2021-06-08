@@ -1,18 +1,22 @@
-from Model import Model
 import configparser
 import pickle
+from nltk.tokenize import word_tokenize
+from nltk.stem import WordNetLemmatizer
 
+
+from MultiClassModel import MultiClassModel
 
 DEFAULT_FILENAME = "model"
 DEFAULT_ALFA = 1
+lemmatizer = WordNetLemmatizer()
 
 
 def make_vocab_of_unique_words(train):
     vocab = []
     for sentence in train:
-        sentence_as_list = sentence.split()
+        sentence_as_list = word_tokenize(sentence)
         for word in sentence_as_list:
-            vocab.append(word)
+            vocab.append(lemmatizer.lemmatize(word))
     vocab = list(dict.fromkeys(vocab))
     return vocab
 
@@ -22,7 +26,9 @@ def calculate_prob(vocab, train, len_of_whole_vocab, alfa):
     for w in vocab:
         emails_with_w = 0
         for sentence in train:
-            if w in sentence:
+            sentence_as_list = word_tokenize(sentence)
+            sentence_as_list = [lemmatizer.lemmatize(word) for word in sentence_as_list]
+            if w in sentence_as_list:
                 emails_with_w += 1
 
         total_ = len(train)
@@ -32,12 +38,23 @@ def calculate_prob(vocab, train, len_of_whole_vocab, alfa):
     return dict_prob
 
 
-def save_model(model: Model, filename):
+def save_model(model: MultiClassModel, filename):
     try:
         pickle.dump(model, open(filename, 'wb'))
         print("Model created successfully!")
     except ImportError:
         print("ImportError error while saving the model!")
+
+
+def read_files_as_text(mypath):
+    from os import listdir
+    from os.path import isfile, join
+    onlyfiles = [f for f in listdir(mypath) if isfile(join(mypath, f))]
+    result = []
+    for f in onlyfiles:
+        with open(join(mypath, f), 'r', encoding="utf-8", errors="ignore") as file:
+            result.append(file.read())
+    return result
 
 
 def train_model():
@@ -52,8 +69,8 @@ def train_model():
         with open('config.ini', 'w') as configfile:
             config.write(configfile)
 
-    train_spam = ['send us your password', 'review our website', 'send your password', 'send us your account']
-    train_ham = ['Your activity report', 'benefits physical activity', 'the importance vows']
+    train_spam = read_files_as_text("./data/enron1/enron1/spam")
+    train_ham = read_files_as_text("./data/enron1/enron1/ham")
     test_emails = {'spam': ['renew your password', 'renew your vows'],
                    'ham': ['benefits of our account', 'the importance of physical activity']}
     stop_key = ['us', 'the', 'of', 'your']
@@ -72,9 +89,18 @@ def train_model():
     prob_spam = total_spam / (total_spam + total_ham)
     prob_ham = total_ham / (total_spam + total_ham)
 
-    model = Model(dict_spamicity, dict_hamicity, prob_spam, prob_ham, total_spam, total_ham, stop_key, alfa)
+    model = MultiClassModel(
+        [dict_spamicity, dict_hamicity],
+        [prob_spam, prob_ham],
+        stop_key,
+        [total_spam, total_ham],
+        alfa,
+        2,
+        ["spam", "ham"]
+    )
+
     save_model(model, filename)
 
 
 if __name__ == '__main__':
-    train_model()
+    read_files_as_text("./data/enron1/enron1/spam")

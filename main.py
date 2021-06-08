@@ -1,8 +1,8 @@
 import math
 import pickle
-from Model import Model
 import configparser
 import train
+from MultiClassModel import MultiClassModel
 
 
 # function to multiply all word probs together
@@ -13,44 +13,30 @@ def mult(list_: list):
     return total_prob
 
 
-def n_bayes(email: list, model: Model):
-    prob_s = []
-    prob_h = []
-    pr_s = model.prob_spam
-    pr_h = model.prob_ham
-    prob_s.append(pr_s)
-    prob_h.append(pr_h)
-
-    for word in email:
-        try:
-            pr_ws = model.dict_spamicity[word]
-        except KeyError:
-            # Apply smoothing for word not seen in spam training data
-            pr_ws = model.alfa / (
-                    model.total_spam +
-                    (len(model.dict_hamicity.keys()) + len(model.dict_spamicity.keys()))
-                    * model.alfa)
-
-        try:
-            pr_wh = model.dict_hamicity[word]
-        except KeyError:
-            # Apply smoothing for word not seen in ham training data
-            pr_wh = model.alfa / (
-                    model.total_ham +
-                    (len(model.dict_hamicity.keys()) + len(model.dict_spamicity.keys()))
-                    * model.alfa)
-
-        prob_s.append(pr_ws)
-        prob_h.append(pr_wh)
-
-    prob_x = mult(prob_s) + mult(prob_h)
-    spam = mult(prob_s) / prob_x
-    ham = mult(prob_h) / prob_x
-    print(spam)
-    print(ham)
-
-    final_classification = spam > ham
-    return final_classification
+def multi_class_bayes(words: list, model: MultiClassModel):
+    prob_x = 0
+    classes = []
+    for i in range(0, model.number_of_class):
+        prob_c = [model.list_of_prob[i]]
+        for word in words:
+            try:
+                pr_ws = model.list_of_dict[i][word]
+            except KeyError:
+                number_of_features = 0
+                for vocab in model.list_of_dict:
+                    number_of_features += len(vocab.keys())
+                pr_ws = model.alfa / (
+                        model.list_of_totals[i] +
+                        number_of_features
+                        * model.alfa)
+            prob_c.append(pr_ws)
+        mult_c = mult(prob_c)
+        classes.append(mult_c)
+        prob_x += mult_c
+    results = []
+    for c in classes:
+        results.append(c/prob_x)
+    return results
 
 
 def load_model():
@@ -68,16 +54,16 @@ def load_model():
 def test_email(email: str):
     # split emails into distinct words
     email_words = list(dict.fromkeys(email.split()))
-    loaded_model: Model = load_model()
+    loaded_model: MultiClassModel = load_model()
 
     # remove new and stop words
     reduced_email = []
     for word in email_words:
         if word not in loaded_model.stop_words:
             reduced_email.append(word)
-    print(reduced_email)
+    print(loaded_model.class_names)
     print(
-        n_bayes(reduced_email, loaded_model)
+        multi_class_bayes(reduced_email, loaded_model)
     )
 
 
